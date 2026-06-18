@@ -1,0 +1,6 @@
+{
+  "name": "ระบบวางแผนเทรดหุ้นไทย RSI",
+  "description": "เครื่องมือวางแผนและบันทึกการซื้อขายหุ้นไทยตามกลยุทธ์ค่า RSI(5) แบบแบ่งซื้อ 4 ไม้และกฎควบคุมความเสี่ยงอย่างเคร่งครัด",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
