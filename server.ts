@@ -230,6 +230,16 @@ async function startServer() {
         ? yahooData.defaultKeyStatistics.payoutRatio.value * 100
         : null;
 
+      const extractedRoe = yahooData?.financialData?.returnOnEquity?.value !== undefined
+        ? yahooData.financialData.returnOnEquity.value * 100
+        : yahooData?.defaultKeyStatistics?.returnOnEquity?.value !== undefined
+          ? yahooData.defaultKeyStatistics.returnOnEquity.value * 100
+          : null;
+
+      const extractedDe = yahooData?.financialData?.debtToEquity?.value !== undefined
+        ? yahooData.financialData.debtToEquity.value / 100
+        : null;
+
       // ระบบจับคู่อินดัสทรีเบื้องต้นไปเป็นกลุ่มเซกเตอร์ภาษาไทยตามโครงสร้างพอร์ตระบบ
       const sectorMap: { [key: string]: string } = {
         'Financial Services': 'ธนาคาร',
@@ -253,6 +263,28 @@ async function startServer() {
       let finalSector = matchedThaiSector;
       let finalYield = extractedYield !== null ? Number(extractedYield.toFixed(2)) : (matchedStaticStock?.yield !== undefined ? matchedStaticStock.yield : 4.5);
       let finalPayout = extractedPayout !== null ? Number(extractedPayout.toFixed(1)) : (matchedStaticStock?.payout !== undefined && matchedStaticStock.payout !== null ? matchedStaticStock.payout : 60.0);
+      let finalRoe = extractedRoe !== null ? Number(extractedRoe.toFixed(2)) : ((matchedStaticStock as any)?.roe !== undefined ? (matchedStaticStock as any).roe : 10.0);
+      let finalDe = extractedDe !== null ? Number(extractedDe.toFixed(2)) : ((matchedStaticStock as any)?.deRatio !== undefined ? (matchedStaticStock as any).deRatio : 1.0);
+
+      // ฟิลด์ใหม่เพิ่มเติมสถิติ VI
+      const extractedPrice = yahooData?.price?.regularMarketPrice?.value !== undefined
+        ? yahooData.price.regularMarketPrice.value
+        : null;
+      let finalFairValue = extractedPrice !== null ? Number((extractedPrice * 1.15).toFixed(2)) : 10.0;
+      let finalDivGrowthYears = 3;
+      let finalDivGrowthRate = 5.0;
+      let finalFreeCashFlowPositive = true;
+      let finalNim = finalSector === 'ธนาคาร' ? 3.0 : undefined;
+      let finalNpl = finalSector === 'ธนาคาร' ? 3.0 : undefined;
+
+      if (matchedStaticStock) {
+        if ((matchedStaticStock as any).fairValue !== undefined) finalFairValue = (matchedStaticStock as any).fairValue;
+        if ((matchedStaticStock as any).dividendGrowthYears !== undefined) finalDivGrowthYears = (matchedStaticStock as any).dividendGrowthYears;
+        if ((matchedStaticStock as any).dividendGrowthRate !== undefined) finalDivGrowthRate = (matchedStaticStock as any).dividendGrowthRate;
+        if ((matchedStaticStock as any).freeCashFlowPositive !== undefined) finalFreeCashFlowPositive = (matchedStaticStock as any).freeCashFlowPositive;
+        if ((matchedStaticStock as any).nim !== undefined) finalNim = (matchedStaticStock as any).nim;
+        if ((matchedStaticStock as any).npl !== undefined) finalNpl = (matchedStaticStock as any).npl;
+      }
 
       // 2. เรียกใช้งานระบบประมวลผลวิเคราะห์ของ Gemini AI (Server-Side) เพื่อสืบค้นข้อมูลปันผลและแปลงชื่อเป็นข้อมูลภาษาไทยที่สวยงาม
       if (process.env.GEMINI_API_KEY) {
@@ -275,13 +307,24 @@ async function startServer() {
 - กลุ่มอุตสาหกรรมดิบ: "${extractedSector || 'ไม่พบ'}"
 - อัตราการจ่ายปันผล: ${extractedYield !== null ? extractedYield + '%' : 'ไม่ระบุ'}
 - Payout Ratio: ${extractedPayout !== null ? extractedPayout + '%' : 'ไม่ระบุ'}
+- อัตราผลตอบแทนจากส่วนผู้ถือหุ้น ROE: ${extractedRoe !== null ? extractedRoe + '%' : 'ไม่ระบุ'}
+- อัตราส่วนหนี้สินต่อทุน D/E Ratio: ${extractedDe !== null ? extractedDe + ' เท่า' : 'ไม่ระบุ'}
+- ราคาปัจจุบัน (ถ้ามี): ${extractedPrice !== null ? extractedPrice + ' บาท' : 'ไม่ระบุ'}
 
 จงประมวลผลข้อมูลและตอบกลับในรูปแบบ JSON วัตถุเพียงอย่างเดียวเท่านั้น (Strictly return JSON only) ที่มีคีย์ตรงตามโครงสร้างด้านล่าง:
 {
   "name_th": "ชื่อย่อบริษัทในภาษาไทยสั้นๆ กระชับ เช่น 'แอดวานซ์ อินโฟร์' หรือ 'ปูนซิเมนต์ไทย'",
   "sector_th": "จัดเข้ากลุ่มใดกลุ่มหนึ่งจากลิสต์นี้เท่านั้น: 'ธนาคาร', 'เทคโนโลยี', 'พลังงาน', 'อสังหาริมทรัพย์', 'ขนส่งโลจิสติกส์', 'พาณิชย์', 'สื่อสาร', 'อื่นๆ'",
   "dividend_yield": 4.5, // อัตราส่วนปันผลเฉลี่ย 3 ปีล่าสุด (เป็นเปอร์เซ็นต์ตัวเลขทศนิยม)
-  "payout_ratio": 60.0 // Payout Ratio ล่าสุด (เป็นเปอร์เซ็นต์ตัวเลขทศนิยม ควรรักษษาความจริงหรือประเมินตามเซกเตอร์)
+  "payout_ratio": 60.0, // Payout Ratio ล่าสุด (เป็นเปอร์เซ็นต์ตัวเลขทศนิยม ควรรักษาความจริงหรือประเมินตามเซกเตอร์)
+  "roe": 12.5, // อัตราผลตอบแทนจากส่วนผู้ถือหุ้น ROE (เป็นเปอร์เซ็นต์ตัวเลขทศนิยม)
+  "de_ratio": 0.8, // อัตราส่วนหนี้สินต่อทุน D/E Ratio (เป็นตัวเลขทศนิยมเท่า เช่น 0.8)
+  "fair_value": 15.2, // มูลค่าที่แท้จริงของหุ้น (Fair Value เป็นตัวเลขทศนิยมบาท ควรคำนวณตามทฤษฎี VI เช่น DDM หรือ DCF โดยอ้างอิงจากราคาตลาดปัจจุบัน)
+  "dividend_growth_years": 5, // จำนวนปีปันผลเติบโตหรือจ่ายต่อเนื่อง (เป็นตัวเลขจำนวนเต็ม)
+  "dividend_growth_rate": 6.5, // อัตราเติบโตปันผลเฉลี่ย 5 ปีล่าสุด (เป็นเปอร์เซ็นต์ตัวเลขทศนิยม)
+  "free_cash_flow_positive": true, // สถานะกระแสเงินสดอิสระ (FCF) เป็นบวกหรือไม่ (true หรือ false)
+  "nim": 3.2, // Net Interest Margin (%) เฉพาะกรณีที่เป็นกลุ่มธนาคาร (ถ้าไม่ใช่ให้ส่ง null)
+  "npl": 2.5 // NPL Ratio (%) เฉพาะกรณีที่เป็นกลุ่มธนาคาร (ถ้าไม่ใช่ให้ส่ง null)
 }
 
 ตอบกลับเฉพาะค่าวัตถุ JSON เท่านั้น ห้ามใส่คำเกริ่นนำหรือคีย์อื่นเด็ดขาด!`;
@@ -301,6 +344,14 @@ async function startServer() {
             if (parsed.sector_th) finalSector = parsed.sector_th;
             if (typeof parsed.dividend_yield === 'number') finalYield = Number(parsed.dividend_yield.toFixed(2));
             if (typeof parsed.payout_ratio === 'number') finalPayout = Number(parsed.payout_ratio.toFixed(1));
+            if (typeof parsed.roe === 'number') finalRoe = Number(parsed.roe.toFixed(2));
+            if (typeof parsed.de_ratio === 'number') finalDe = Number(parsed.de_ratio.toFixed(2));
+            if (typeof parsed.fair_value === 'number') finalFairValue = Number(parsed.fair_value.toFixed(2));
+            if (typeof parsed.dividend_growth_years === 'number') finalDivGrowthYears = parsed.dividend_growth_years;
+            if (typeof parsed.dividend_growth_rate === 'number') finalDivGrowthRate = Number(parsed.dividend_growth_rate.toFixed(2));
+            if (typeof parsed.free_cash_flow_positive === 'boolean') finalFreeCashFlowPositive = parsed.free_cash_flow_positive;
+            if (typeof parsed.nim === 'number') finalNim = Number(parsed.nim.toFixed(2));
+            if (typeof parsed.npl === 'number') finalNpl = Number(parsed.npl.toFixed(2));
           }
         } catch (gemIniErr: any) {
           // หาก Gemini ไม่ว่างหรือติดโค้วต้าจำกัด ให้ทำการแสดงผลบันทึกอย่างปลอดภัยแบบสุภาพ ไม่แจ้งเป็นพ้นผิดพลาดร้ายแรง
@@ -313,8 +364,17 @@ async function startServer() {
         name: finalName,
         sector: finalSector,
         dividendYield3Yr: finalYield,
-        payoutRatio: finalPayout
+        payoutRatio: finalPayout,
+        roe: finalRoe,
+        deRatio: finalDe,
+        fairValue: finalFairValue,
+        dividendGrowthYears: finalDivGrowthYears,
+        dividendGrowthRate: finalDivGrowthRate,
+        freeCashFlowPositive: finalFreeCashFlowPositive,
+        nim: finalNim,
+        npl: finalNpl
       });
+
 
     } catch (err: any) {
       console.error('[API Lookup Error] Critical exception:', err);

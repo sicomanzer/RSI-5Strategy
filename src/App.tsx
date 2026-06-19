@@ -21,7 +21,8 @@ import {
   calculateSMA,
   downsamplePrices,
   evaluateHoldingSummary,
-  calculateTransactionCost
+  calculateTransactionCost,
+  calculateMOS
 } from './utils/calculations';
 import { exportToExcelFile } from './utils/excelExport';
 
@@ -31,6 +32,7 @@ import TransactionTab from './components/TransactionTab';
 import DashboardTab from './components/DashboardTab';
 import StrategyTab from './components/StrategyTab';
 import SettingsTab from './components/SettingsTab';
+import ValuationCalculatorModal from './components/ValuationCalculatorModal';
 
 // นำเข้าไอคอนจาก lucide-react
 import {
@@ -61,6 +63,7 @@ export default function App() {
   const [isLoadingRealPrices, setIsLoadingRealPrices] = useState<boolean>(false);
   const [updateStatus, setUpdateStatus] = useState<'updating' | 'success' | 'error' | null>(null);
   const [preselectedSymbol, setPreselectedSymbol] = useState<string | null>(null);
+  const [valuationCalculatorSymbol, setValuationCalculatorSymbol] = useState<string | null>(null);
 
   // ระบบสัญญานเตือนการซื้อ (RSI < 20)
   const [showBuySignalPopup, setShowBuySignalPopup] = useState<boolean>(false);
@@ -76,10 +79,24 @@ export default function App() {
     stocksRef.current = stocks;
   }, [stocks]);
 
-  // ตรวจจับและเปิดป๊อปอัปแจ้งสัญญานช้อนซื้อเฉพาะเมื่อเข้าเว็บเป็นครั้งแรกและมีหุ้นที่เข้าเงื่อนไข RSI < 20
+  // ฟังก์ชันเช็คสัญญาณซื้อสะสมตามสูตรไฮบริด (RSI < threshold และมี MOS ได้ตามเกณฑ์)
+  const hasBuySignal = (stock: StockInfo): boolean => {
+    if (stock.rsi5 === null) return false;
+    const rsiBuyThreshold = settings.rsiBuyThreshold ?? 20;
+    if (stock.rsi5 >= rsiBuyThreshold) return false;
+
+    const hasFV = stock.fairValue !== undefined && stock.fairValue > 0;
+    if (!hasFV) return true;
+
+    const mosVal = calculateMOS(stock.currentPrice, stock.fairValue);
+    const requireMOS = settings.requireMOSPercent ?? 20;
+    return mosVal >= requireMOS;
+  };
+
+  // ตรวจจับและเปิดป๊อปอัปแจ้งสัญญานช้อนซื้อเฉพาะเมื่อเข้าเว็บเป็นครั้งแรกและมีหุ้นที่เข้าเงื่อนไขสูตรซื้อไฮบริด
   useEffect(() => {
     if (stocks.length > 0 && !hasAutoOpenedPopup) {
-      const activeSignals = stocks.filter(s => s.rsi5 !== null && s.rsi5 < 20);
+      const activeSignals = stocks.filter(s => hasBuySignal(s));
       if (activeSignals.length > 0) {
         setShowBuySignalPopup(true);
         setHasAutoOpenedPopup(true);
@@ -87,7 +104,7 @@ export default function App() {
     }
   }, [stocks, hasAutoOpenedPopup]);
 
-  // ระบบกระตุ้นการส่ง Web Push Notifications เมื่อระดับ RSI5 < 20 ตามที่ขอตั้งค่าไว้
+  // ระบบกระตุ้นการส่ง Web Push Notifications เมื่อระดับ RSI-5 และ MOS เข้าเกณฑ์สะสม
   useEffect(() => {
     if (!settings.enableWebNotifications || typeof Notification === 'undefined' || Notification.permission !== 'granted') {
       return;
@@ -96,7 +113,7 @@ export default function App() {
     if (stocks.length === 0) return;
 
     const rsiBuyThreshold = settings.rsiBuyThreshold ?? 20;
-    const oversoldList = stocks.filter(s => s.rsi5 !== null && s.rsi5 < rsiBuyThreshold);
+    const oversoldList = stocks.filter(s => hasBuySignal(s));
 
     // ดำเนินการลูปสัญญานที่มีคุณภาพสู่หน้าจอ
     oversoldList.forEach(stock => {
@@ -104,22 +121,22 @@ export default function App() {
         alertedStocksRef.current.add(stock.symbol);
 
         new Notification(`🚨 ตรวจพบสัญญาณสะสมพอร์ตพาร์ตเนอร์: ${stock.symbol}`, {
-          body: `หุ้นปันผลเด่น ${stock.name} ดิ่งสู่มูลค่าสะสมวิกฤต RSI-5 = ${stock.rsi5.toFixed(2)}%! ซึ่งต่ำกว่าขอบซื้อที่บันทึก (${rsiBuyThreshold}%) ถือโอกาสเฉลี่ยตามเป้าหมาย`,
+          body: `หุ้นปันผลเด่น ${stock.name} ดิ่งเข้าเขตซื้อสะสมไฮบริด (RSI-5 = ${stock.rsi5?.toFixed(2)}% และผ่านเกณฑ์ MOS)! ถือโอกาสเฉลี่ยตามเป้าหมาย`,
           icon: "/favicon.ico",
           tag: `rsi-alert-${stock.symbol}` // สิทธิ์ของบราวเซอร์เพื่อกรองบัตรข้อความเดียวตัว
         });
       }
     });
 
-    // คืนสิทธิ์ล้างตัวแปรเมื่อราคาเด้งพ้นเขต เพื่อให้แจ้งเตือนใหม่หากตกลงมาอีกรอบในอนาคต
+    // คืนสิทธิ์ล้างตัวแปรเมื่อสัญญาณพ้นขีด เพื่อให้แจ้งเตือนใหม่หากกลับเข้าเกณฑ์อีกรอบในอนาคต
     alertedStocksRef.current.forEach(symbol => {
       const liveStock = stocks.find(s => s.symbol === symbol);
-      if (!liveStock || liveStock.rsi5 === null || liveStock.rsi5 >= rsiBuyThreshold) {
+      if (!liveStock || !hasBuySignal(liveStock)) {
         alertedStocksRef.current.delete(symbol);
       }
     });
 
-  }, [stocks, settings.enableWebNotifications, settings.rsiBuyThreshold]);
+  }, [stocks, settings.enableWebNotifications, settings.rsiBuyThreshold, settings.requireMOSPercent]);
 
   // ระบบ Background Polling ดึงและวิเคราะห์ราคาเบื้องหลังเมื่อเปิดการแจ้งเตือนบราวเซอร์ทิ้งไว้
   useEffect(() => {
@@ -171,7 +188,15 @@ export default function App() {
               currentPrice: history[history.length - 1],
               historicalPrices: history,
               rsi5: null,
-              sma60: null
+              sma60: null,
+              roe: item.roe,
+              deRatio: item.deRatio,
+              fairValue: item.fairValue,
+              dividendGrowthYears: item.dividendGrowthYears,
+              dividendGrowthRate: item.dividendGrowthRate,
+              freeCashFlowPositive: item.freeCashFlowPositive,
+              nim: item.nim,
+              npl: item.npl
             };
           });
         }
@@ -213,7 +238,15 @@ export default function App() {
           currentPrice: history[history.length - 1],
           historicalPrices: history, // ยังเก็บบันทึกประวัติราคารายวันประจุเดิมไว้
           rsi5: rsiValue,
-          sma60: smaValue
+          sma60: smaValue,
+          roe: matched?.roe !== undefined ? matched.roe : item.roe,
+          deRatio: matched?.deRatio !== undefined ? matched.deRatio : item.deRatio,
+          fairValue: matched?.fairValue !== undefined ? matched.fairValue : item.fairValue,
+          dividendGrowthYears: matched?.dividendGrowthYears !== undefined ? matched.dividendGrowthYears : item.dividendGrowthYears,
+          dividendGrowthRate: matched?.dividendGrowthRate !== undefined ? matched.dividendGrowthRate : item.dividendGrowthRate,
+          freeCashFlowPositive: matched?.freeCashFlowPositive !== undefined ? matched.freeCashFlowPositive : item.freeCashFlowPositive,
+          nim: matched?.nim !== undefined ? matched.nim : item.nim,
+          npl: matched?.npl !== undefined ? matched.npl : item.npl
         };
       });
 
@@ -279,14 +312,57 @@ export default function App() {
     const savedStocks = localStorage.getItem('thai_rsi_stocks');
     let initialStocks: StockInfo[] = [];
     if (savedStocks) {
-      const parsedStocks: StockInfo[] = JSON.parse(savedStocks);
+      let parsedStocks: StockInfo[] = JSON.parse(savedStocks);
+      
+      // ดึงสัญลักษณ์จาก localStorage ที่มีอยู่เดิม
+      const existingSymbols = new Set(parsedStocks.map(s => s.symbol));
+      const newStocksAdded = INITIAL_STOCKS_DATA.filter(item => !existingSymbols.has(item.symbol));
+      
+      // หากพบว่ามีหุ้นตัวใหม่ใน INITIAL_STOCKS_DATA ที่ยังไม่มีใน localStorage ให้ผนวกเข้าไปทันที!
+      if (newStocksAdded.length > 0) {
+        const generatedNewStocks = newStocksAdded.map(item => {
+          const history = generateHistoricalPrices(item.symbol, item.basePrice);
+          const downsampled = downsamplePrices(history, loadedSettings.timeframe || 'D1');
+          return {
+            symbol: item.symbol,
+            name: item.name,
+            dividendYield3Yr: item.dividendYield3Yr,
+            payoutRatio: item.payoutRatio,
+            sector: item.sector,
+            currentPrice: history[history.length - 1],
+            historicalPrices: history,
+            rsi5: calculateRSI(downsampled, 5),
+            sma60: calculateSMA(downsampled, 60),
+            roe: item.roe,
+            deRatio: item.deRatio,
+            fairValue: item.fairValue,
+            dividendGrowthYears: item.dividendGrowthYears,
+            dividendGrowthRate: item.dividendGrowthRate,
+            freeCashFlowPositive: item.freeCashFlowPositive,
+            nim: item.nim,
+            npl: item.npl
+          };
+        });
+        parsedStocks = [...parsedStocks, ...generatedNewStocks];
+        localStorage.setItem('thai_rsi_stocks', JSON.stringify(parsedStocks));
+      }
+
       // คำนวณขอบเขตเวลาวิเคราะห์ซิงค์ให้สวยงามตาม Timeframe ล่าสุด
       initialStocks = parsedStocks.map(stock => {
         const downsampled = downsamplePrices(stock.historicalPrices, loadedSettings.timeframe || 'D1');
+        const defaultData = INITIAL_STOCKS_DATA.find(d => d.symbol === stock.symbol);
         return {
           ...stock,
           rsi5: calculateRSI(downsampled, 5),
-          sma60: calculateSMA(downsampled, 60)
+          sma60: calculateSMA(downsampled, 60),
+          roe: stock.roe !== undefined ? stock.roe : defaultData?.roe,
+          deRatio: stock.deRatio !== undefined ? stock.deRatio : defaultData?.deRatio,
+          fairValue: stock.fairValue !== undefined ? stock.fairValue : defaultData?.fairValue,
+          dividendGrowthYears: stock.dividendGrowthYears !== undefined ? stock.dividendGrowthYears : defaultData?.dividendGrowthYears,
+          dividendGrowthRate: stock.dividendGrowthRate !== undefined ? stock.dividendGrowthRate : defaultData?.dividendGrowthRate,
+          freeCashFlowPositive: stock.freeCashFlowPositive !== undefined ? stock.freeCashFlowPositive : defaultData?.freeCashFlowPositive,
+          nim: stock.nim !== undefined ? stock.nim : defaultData?.nim,
+          npl: stock.npl !== undefined ? stock.npl : defaultData?.npl
         };
       });
       setStocks(initialStocks);
@@ -307,7 +383,15 @@ export default function App() {
           currentPrice: history[history.length - 1],
           historicalPrices: history,
           rsi5: rsi,
-          sma60: sma60
+          sma60: sma60,
+          roe: item.roe,
+          deRatio: item.deRatio,
+          fairValue: item.fairValue,
+          dividendGrowthYears: item.dividendGrowthYears,
+          dividendGrowthRate: item.dividendGrowthRate,
+          freeCashFlowPositive: item.freeCashFlowPositive,
+          nim: item.nim,
+          npl: item.npl
         };
       });
       setStocks(initialStocks);
@@ -559,6 +643,41 @@ export default function App() {
     setTransactions(updatedTxs);
     saveStateToLocalStorage(settings, stocks, updatedHoldings, updatedTxs);
   };
+ 
+  // ดำเนินการบันทึกเมื่อกดบันทึกรับเงินปันผลสะสม (Record DIVIDEND Action)
+  const handleRecordDividend = (symbol: string, amount: number, rsi: number, sma: number) => {
+    const holding = holdings.find(h => h.symbol === symbol);
+    if (!holding) return;
+
+    const stockInfo = stocks.find(s => s.symbol === symbol);
+    if (!stockInfo) return;
+
+    const summary = evaluateHoldingSummary(holding, stockInfo.currentPrice, stockInfo.dividendYield3Yr);
+    if (summary.totalQty <= 0) {
+      alert("คุณต้องถือครองหุ้นนี้อยู่จึงจะบันทึกปันผลได้");
+      return;
+    }
+
+    const dateStr = new Date().toLocaleString('th-TH');
+    const newTx: TransactionRecord = {
+      id: `${symbol}-div-${Date.now()}`,
+      symbol,
+      type: 'DIVIDEND',
+      tranche: 'ปันผลทบต้น',
+      price: Number((amount / summary.totalQty).toFixed(4)), // ปันผลต่อหุ้นโดยประมาณ
+      qty: summary.totalQty,
+      feeAndVat: 0, // ปันผลไม่มีค่าธรรมเนียมเทรด
+      totalAmount: Number(amount.toFixed(2)),
+      date: dateStr,
+      rsiValue: rsi,
+      smaValue: sma
+    };
+
+    const updatedTxs = [newTx, ...transactions];
+    setTransactions(updatedTxs);
+    saveStateToLocalStorage(settings, stocks, holdings, updatedTxs);
+  };
+
 
   // ลบแถวบันทึกธุรกรรมซื้อขาย (Delete specific transaction row)
   const handleDeleteTransaction = (id: string) => {
@@ -705,7 +824,15 @@ export default function App() {
         currentPrice: history[history.length - 1],
         historicalPrices: history,
         rsi5: rsi,
-        sma60: sma60
+        sma60: sma60,
+        roe: item.roe,
+        deRatio: item.deRatio,
+        fairValue: item.fairValue,
+        dividendGrowthYears: item.dividendGrowthYears,
+        dividendGrowthRate: item.dividendGrowthRate,
+        freeCashFlowPositive: item.freeCashFlowPositive,
+        nim: item.nim,
+        npl: item.npl
       };
     });
 
@@ -729,7 +856,20 @@ export default function App() {
 
   // จัดการเมื่อกด "บันทึกเทรด" ด่วนจากหน้าภาพรวม 20 ตัว
   const handleQuickTrade = (symbol: string) => {
+    setPreselectedSymbol(symbol);
     setActiveTab('transactions');
+  };
+
+  // ดำเนินการอัปเดตมูลค่าที่เหมาะสม (Apply Fair Value) จากเครื่องคำนวณ
+  const handleApplyValuation = (symbol: string, fairValue: number) => {
+    const updatedStocks = stocks.map(s => {
+      if (s.symbol === symbol) {
+        return { ...s, fairValue };
+      }
+      return s;
+    });
+    setStocks(updatedStocks);
+    localStorage.setItem('thai_rsi_stocks', JSON.stringify(updatedStocks));
   };
 
   // 4. คำนวณข้อมูลง่อยๆ แสดงบน Header
@@ -744,7 +884,8 @@ export default function App() {
 
   const totalBuys = transactions.filter(t => t.type === 'BUY').reduce((acc, t) => acc + t.totalAmount, 0);
   const totalSells = transactions.filter(t => t.type === 'SELL').reduce((acc, t) => acc + t.totalAmount, 0);
-  const currentCashVal = settings.totalCapital - totalBuys + totalSells;
+  const totalDividends = transactions.filter(t => t.type === 'DIVIDEND').reduce((acc, t) => acc + t.totalAmount, 0);
+  const currentCashVal = settings.totalCapital - totalBuys + totalSells + totalDividends;
   const navTotalValue = currentCashVal + totalMarketValue;
   const growthRate = ((navTotalValue - settings.totalCapital) / settings.totalCapital) * 100;
 
@@ -862,10 +1003,10 @@ export default function App() {
       {/* 🚀 พื้นที่หลักเนื้อหาแสดงข้อมูลแท็บ (Dynamic Modular Content Grid with fade animation) */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 overflow-y-auto">
         
-        {/* แถบแจ้งเตือนสะสมสัญญาณทางเทคนิคระเบียบวินัยสูงสุดด้านบนสุด (RSI-5 < 20 Top Alert Banner) */}
+        {/* แถบแจ้งเตือนสะสมสัญญาณทางเทคนิคระเบียบวินัยสูงสุดด้านบนสุด (RSI-5 < 20 และ MOS ผ่านเกณฑ์ Top Alert Banner) */}
         {showTopSignalBanner && stocks.length > 0 && (
           (() => {
-            const activeSignals = stocks.filter(s => s.rsi5 !== null && s.rsi5 < 20);
+            const activeSignals = stocks.filter(s => hasBuySignal(s));
             if (activeSignals.length === 0) return null;
             return (
               <motion.div 
@@ -879,7 +1020,7 @@ export default function App() {
                   </div>
                   <div>
                     <h3 className="font-bold text-slate-800 text-sm md:text-base flex items-center gap-2">
-                      ตรวจพบหุ้นสัญญาณซื้อรุนแรงเข้าจุดสะสมปันผล (RSI-5 &lt; 20) ทั้งสิ้น {activeSignals.length} ตัว!
+                      ตรวจพบหุ้นสัญญาณซื้อสะสมไฮบริด (RSI-5 &lt; {settings.rsiBuyThreshold} และ MOS ผ่านเกณฑ์) ทั้งสิ้น {activeSignals.length} ตัว!
                     </h3>
                     <p className="text-xs text-slate-600 font-medium mt-1">
                       หุ้นและค่า RSI ปัจจุบัน: {activeSignals.map(s => `${s.symbol} (RSI: ${s.rsi5?.toFixed(2)})`).join(', ')}
@@ -922,6 +1063,7 @@ export default function App() {
                 onUpdatePrices={handleManualPriceUpdate}
                 onSimulateFluctuations={handleSimulateMarket}
                 onQuickTrade={handleQuickTrade}
+                onOpenValuationCalculator={setValuationCalculatorSymbol}
               />
             )}
             
@@ -933,6 +1075,7 @@ export default function App() {
                 settings={settings}
                 onRecordBuy={handleRecordBuy}
                 onRecordSell={handleRecordSell}
+                onRecordDividend={handleRecordDividend}
                 onDeleteTransaction={handleDeleteTransaction}
                 onResetTransactions={handleResetToDefault}
                 preselectedSymbol={preselectedSymbol}
@@ -963,6 +1106,7 @@ export default function App() {
                 onImportFullState={handleImportFullState}
                 onResetToDefault={handleResetToDefault}
                 onUpdateStocks={handleUpdateStocks}
+                onOpenValuationCalculator={setValuationCalculatorSymbol}
               />
             )}
           </motion.div>
@@ -1004,7 +1148,7 @@ export default function App() {
                   </div>
                   <div>
                     <span className="text-[10px] font-bold tracking-widest uppercase text-amber-100 bg-white/10 px-2 py-0.5 rounded">ตรวจจับระบบด่วน</span>
-                    <h2 className="text-lg md:text-xl font-bold mt-1">สัญญาณเข้าเงื่อนไขช้อนซื้อสะสม! RSI-5 &lt; 20</h2>
+                    <h2 className="text-lg md:text-xl font-bold mt-1">สัญญาณเข้าเงื่อนไขช้อนซื้อสะสม! (RSI-5 &lt; {settings.rsiBuyThreshold} และ MOS ผ่านเกณฑ์)</h2>
                   </div>
                 </div>
               </div>
@@ -1012,11 +1156,11 @@ export default function App() {
               {/* รายการตัวแปรสัญญาณในตาราง */}
               <div className="p-6 overflow-y-auto flex-1">
                 <p className="text-sm text-slate-500 mb-4 leading-relaxed font-medium">
-                  พบคู่หุ้นเข้าสูตรสวิตช์โอเวอร์คิวลึก (Extreme Oversold) ตามกรอบการตั้งค่าเวลากลยุทธ์ของพอร์ตของคุณในขณะนี้ เพื่อผลักดันพอร์ตหุ้นปันผลและลดราคาต้นทุนเฉลี่ย:
+                  พบคู่หุ้นเข้าสูตรสวิตช์โอเวอร์คิวลึกสะสมปลอดภัย (RSI-5 &lt; {settings.rsiBuyThreshold} และมี MOS $\ge$ {settings.requireMOSPercent || 20}%) เพื่อความปลอดภัยและได้แต้มต่อราคาสูงสุด:
                 </p>
 
                 <div className="space-y-3.5">
-                  {stocks.filter(s => s.rsi5 !== null && s.rsi5 < 20).map((stock) => {
+                  {stocks.filter(s => hasBuySignal(s)).map((stock) => {
                     // ตรวจหาระดับการถือครองปัจจุบัน
                     const heldInfo = holdings.find(h => h.symbol === stock.symbol);
                     let trancheMsg = "ไม้ 1 (เข้าเกณฑ์เริ่มสะสมตัวแรก)";
@@ -1040,6 +1184,12 @@ export default function App() {
                             <span>ราคาปัจจุบัน: <strong className="text-slate-800">{stock.currentPrice.toFixed(2)} ฿</strong></span>
                             <span>•</span>
                             <span className="text-slate-500">กลุ่ม: {stock.sector}</span>
+                            {stock.fairValue !== undefined && stock.fairValue > 0 && (
+                              <>
+                                <span>•</span>
+                                <span className="text-emerald-600 font-bold">MOS: {calculateMOS(stock.currentPrice, stock.fairValue).toFixed(1)}%</span>
+                              </>
+                            )}
                           </div>
                           <div className="mt-2 flex items-center gap-1.5 text-[10px] bg-slate-200/60 text-slate-600 px-2.5 py-0.5 rounded-md font-semibold font-sans">
                             <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
@@ -1175,6 +1325,20 @@ export default function App() {
               )}
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* 🧮 เครื่องคำนวณมูลค่าที่เหมาะสมแบบ VI (Valuation Calculator Modal) */}
+      <AnimatePresence>
+        {valuationCalculatorSymbol && (
+          <ValuationCalculatorModal
+            isOpen={!!valuationCalculatorSymbol}
+            symbol={valuationCalculatorSymbol}
+            requireMOSPercent={settings.requireMOSPercent ?? 20}
+            stocks={stocks}
+            onClose={() => setValuationCalculatorSymbol(null)}
+            onApply={handleApplyValuation}
+          />
         )}
       </AnimatePresence>
 

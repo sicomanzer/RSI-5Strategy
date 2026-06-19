@@ -4,7 +4,7 @@
  */
 
 // ประเภทตลาดและกลุ่มอุตสาหกรรมสำหรับหุ้น 20 ตัว
-export type SectorType = 'ธนาคาร' | 'พลังงาน' | 'พลังงานสะอาด' | 'ปิโตรเลียม' | 'ผลิตไฟฟ้า' | 'นิคมอุตสาหกรรม' | 'นิคมโลจิสติกส์' | 'รถไฟฟ้า' | 'กระจายไฟฟ้า' | 'อาหารส่งออก' | 'อาหารโรงแรม' | 'ค้าปลีก' | 'สื่อสาร' | 'ประกันชีวิต' | 'อสังหาริมทรัพย์' | 'ขนส่งโลจิสติกส์';
+export type SectorType = 'ธนาคาร' | 'พลังงาน' | 'พลังงานสะอาด' | 'ปิโตรเลียม' | 'ผลิตไฟฟ้า' | 'นิคมอุตสาหกรรม' | 'นิคมโลจิสติกส์' | 'รถไฟฟ้า' | 'กระจายไฟฟ้า' | 'อาหารส่งออก' | 'อาหารโรงแรม' | 'ค้าปลีก' | 'สื่อสาร' | 'ประกันชีวิต' | 'อสังหาริมทรัพย์' | 'ขนส่งโลจิสติกส์' | 'เทคโนโลยี' | 'พาณิชย์' | 'อื่นๆ';
 
 // ข้อมูลพื้นฐานและตัวบ่งชี้ทางเทคนิคหลักของหุ้นแต่ละตัว
 export interface StockInfo {
@@ -17,6 +17,15 @@ export interface StockInfo {
   historicalPrices: number[]; // ราคาย้อนหลัง 65 วัน เพื่อใช้วัด RSI(5) และ SMA60
   rsi5: number;             // ค่า RSI(5) ปัจจุบัน
   sma60: number;            // ค่า SMA60 ปัจจุบัน
+  roe?: number;             // ROE (%) เช่น 15.5
+  deRatio?: number;         // D/E Ratio (เท่า) เช่น 0.8
+  fairValue?: number;       // มูลค่าที่แท้จริงของหุ้น (Fair Value)
+  mos?: number;             // Margin of Safety (%)
+  dividendGrowthYears?: number; // จำนวนปีที่ปันผลเติบโตต่อเนื่อง
+  dividendGrowthRate?: number;  // อัตราการเติบโตของเงินปันผล 5 ปี (%)
+  freeCashFlowPositive?: boolean; // กระแสเงินสดอิสระเป็นบวกหรือไม่
+  nim?: number;             // Net Interest Margin (%) สำหรับธนาคาร
+  npl?: number;             // Non-Performing Loans (%) สำหรับธนาคาร
 }
 
 // สถานะการถือครองหุ้นตัวนั้นๆ (Active Trade State)
@@ -63,12 +72,12 @@ export interface ActiveHolding {
 export interface TransactionRecord {
   id: string;
   symbol: string;
-  type: 'BUY' | 'SELL'; // ซื้อ หรือ ขาย
-  tranche: 'ไม้ 1' | 'ไม้ 2' | 'ไม้ 3' | 'ไม้ 4' | 'ขาย 50%' | 'ขายทั้งหมด' | 'คัดลอส';
+  type: 'BUY' | 'SELL' | 'DIVIDEND'; // ซื้อ ขาย หรือ ปันผลสะสม
+  tranche: 'ไม้ 1' | 'ไม้ 2' | 'ไม้ 3' | 'ไม้ 4' | 'ขาย 50%' | 'ขายทั้งหมด' | 'คัดลอส' | 'ปันผลทบต้น';
   price: number;
   qty: number;
   feeAndVat: number;
-  totalAmount: number; // ซื้อ = ยอดจ่ายรวมค่าธรรมเนียม, ขาย = ยอดรับหักค่าธรรมเนียม
+  totalAmount: number; // ซื้อ = ยอดจ่ายรวมค่าธรรมเนียม, ขาย/ปันผล = ยอดเงินรับ
   date: string;
   rsiValue: number;    // บันทึก RSI ตอนทำรายการ
   smaValue: number;    // บันทึก SMA60 ตอนทำรายการ
@@ -102,4 +111,6 @@ export interface SystemSettings {
   timeframe: 'D1' | 'W1' | 'M1'; // ไทม์เฟรมในการวิเคราะห์: D1 = Daily, W1 = Weekly, M1 = Monthly
   enableWebNotifications?: boolean; // เปิดระบบแจ้งเตือนบราวเซอร์
   notificationCheckInterval?: number; // ระยะเวลาการตรวจสอบในเบื้องหลัง (หน่วยนาที เช่น 1, 5, 15, 30)
+  requireMOSPercent: number;  // เกณฑ์ Margin of Safety ขั้นต่ำ (เช่น 20%)
+  bennerCashAllocation: boolean; // การวิเคราะห์จัดสรรเงินสดตามวัฏจักร Benner
 }

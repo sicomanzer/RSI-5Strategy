@@ -250,3 +250,36 @@ export function calculateMaxSharesForTranche(
   // แต่ในระบบบันทึกแผน ปรับเป็นคำนวณจำนวนเต็มปัดเศษลง (เพื่อไม่ให้เงินทลักงบ)
   return Math.floor(exactQty);
 }
+
+/**
+ * คำนวณเปอร์เซ็นต์ Margin of Safety (MOS)
+ * MOS = ((มูลค่าที่แท้จริง - ราคาปัจจุบัน) / มูลค่าที่แท้จริง) * 100
+ */
+export function calculateMOS(price: number, fairValue?: number): number {
+  if (!fairValue || fairValue <= 0) return 0;
+  return Number((((fairValue - price) / fairValue) * 100).toFixed(2));
+}
+
+/**
+ * คืนสถานะเฟสวัฏจักร Benner สำหรับปีที่เลือก
+ */
+export function getBennerPhaseForYear(year: number): 'A' | 'B' | 'C' {
+  if ([2019, 2035].includes(year)) return 'A';
+  if ([2026, 2034].includes(year)) return 'B';
+  return 'C'; // 2023, 2032 เป็นต้น
+}
+
+/**
+ * คำนวณสัดส่วนเงินสดแนะนำตามเฟสของ Benner Cycle
+ * - A (Panic): 10%
+ * - C (Hard Times): 25%
+ * - B (Good Times): 40%
+ */
+export function getBennerRecommendedCash(phase: 'A' | 'B' | 'C'): number {
+  switch (phase) {
+    case 'A': return 10;
+    case 'C': return 25;
+    case 'B': return 40;
+    default: return 25;
+  }
+}

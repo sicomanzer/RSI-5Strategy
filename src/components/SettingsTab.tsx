@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { SystemSettings, ActiveHolding, TransactionRecord, StockInfo } from '../types';
-import { Settings, Save, Download, Upload, AlertTriangle, CheckCircle, RefreshCw, Bell, Info, Sparkles, Plus, Trash2, Edit3, Check, X, Search } from 'lucide-react';
+import { Settings, Save, Download, Upload, AlertTriangle, CheckCircle, RefreshCw, Bell, Info, Sparkles, Plus, Trash2, Edit3, Check, X, Search, Calculator } from 'lucide-react';
 import { motion } from 'motion/react';
 import { generateHistoricalPrices } from '../constants';
 
@@ -23,6 +23,7 @@ interface SettingsTabProps {
   }) => void;
   onResetToDefault: () => void;
   onUpdateStocks?: (newStocks: StockInfo[]) => void;
+  onOpenValuationCalculator?: (symbol: string) => void;
 }
 
 export default function SettingsTab({
@@ -33,7 +34,8 @@ export default function SettingsTab({
   onSaveSettings,
   onImportFullState,
   onResetToDefault,
-  onUpdateStocks
+  onUpdateStocks,
+  onOpenValuationCalculator
 }: SettingsTabProps) {
   // สเตตบันทึกรายการหุ้นภายในสำหรับฟังก์ชัน เพิ่ม/ลบ/แก้ไข รายละเอียด
   const [localStocks, setLocalStocks] = useState<StockInfo[]>(stocks);
@@ -45,6 +47,14 @@ export default function SettingsTab({
   const [newSector, setNewSector] = useState('ธนาคาร');
   const [newYield, setNewYield] = useState('4.5');
   const [newPayout, setNewPayout] = useState('60');
+  const [newRoe, setNewRoe] = useState('12.5');
+  const [newDeRatio, setNewDeRatio] = useState('1.2');
+  const [newFairValue, setNewFairValue] = useState('10.0');
+  const [newDivGrowthYears, setNewDivGrowthYears] = useState('3');
+  const [newDivGrowthRate, setNewDivGrowthRate] = useState('5.0');
+  const [newFreeCashFlowPositive, setNewFreeCashFlowPositive] = useState<boolean>(true);
+  const [newNim, setNewNim] = useState('3.0');
+  const [newNpl, setNewNpl] = useState('3.0');
   
   const [isFetchingInfo, setIsFetchingInfo] = useState(false);
 
@@ -54,6 +64,18 @@ export default function SettingsTab({
   const [editSector, setEditSector] = useState('');
   const [editYield, setEditYield] = useState('4.5');
   const [editPayout, setEditPayout] = useState('60');
+  const [editRoe, setEditRoe] = useState('12.5');
+  const [editDeRatio, setEditDeRatio] = useState('1.2');
+  const [editFairValue, setEditFairValue] = useState('10.0');
+  const [editDivGrowthYears, setEditDivGrowthYears] = useState('3');
+  const [editDivGrowthRate, setEditDivGrowthRate] = useState('5.0');
+  const [editFreeCashFlowPositive, setEditFreeCashFlowPositive] = useState<boolean>(true);
+  const [editNim, setEditNim] = useState('3.0');
+  const [editNpl, setEditNpl] = useState('3.0');
+
+  // สำหรับการตั้งค่าระบบความปลอดภัย VI
+  const [requireMOSPercent, setRequireMOSPercent] = useState(settings.requireMOSPercent ? settings.requireMOSPercent.toString() : '20');
+  const [bennerCashAllocation, setBennerCashAllocation] = useState<boolean>(settings.bennerCashAllocation !== undefined ? settings.bennerCashAllocation : true);
 
   useEffect(() => {
     setLocalStocks(stocks);
@@ -107,6 +129,8 @@ export default function SettingsTab({
     setTimeframe(settings.timeframe || 'D1');
     setEnableWebNotifications(settings.enableWebNotifications || false);
     setNotificationCheckInterval(settings.notificationCheckInterval || 5);
+    setRequireMOSPercent(settings.requireMOSPercent ? settings.requireMOSPercent.toString() : '20');
+    setBennerCashAllocation(settings.bennerCashAllocation !== undefined ? settings.bennerCashAllocation : true);
     if (typeof Notification !== 'undefined') {
       setPermissionState(Notification.permission);
     }
@@ -132,6 +156,15 @@ export default function SettingsTab({
       setNewSector(data.sector || 'อื่นๆ');
       setNewYield((data.dividendYield3Yr !== undefined && data.dividendYield3Yr !== null) ? data.dividendYield3Yr.toFixed(2) : '4.50');
       setNewPayout((data.payoutRatio !== undefined && data.payoutRatio !== null) ? data.payoutRatio.toFixed(1) : '60.0');
+      setNewRoe((data.roe !== undefined && data.roe !== null) ? data.roe.toFixed(2) : '12.50');
+      setNewDeRatio((data.deRatio !== undefined && data.deRatio !== null) ? data.deRatio.toFixed(2) : '1.20');
+      
+      setNewFairValue((data.fairValue !== undefined && data.fairValue !== null) ? data.fairValue.toFixed(2) : '10.00');
+      setNewDivGrowthYears((data.dividendGrowthYears !== undefined && data.dividendGrowthYears !== null) ? data.dividendGrowthYears.toString() : '3');
+      setNewDivGrowthRate((data.dividendGrowthRate !== undefined && data.dividendGrowthRate !== null) ? data.dividendGrowthRate.toFixed(2) : '5.00');
+      setNewFreeCashFlowPositive(data.freeCashFlowPositive !== undefined ? data.freeCashFlowPositive : true);
+      setNewNim((data.nim !== undefined && data.nim !== null) ? data.nim.toFixed(2) : '3.00');
+      setNewNpl((data.npl !== undefined && data.npl !== null) ? data.npl.toFixed(2) : '3.00');
       return data;
     } catch (err: any) {
       console.error("[Lookup Error]:", err);
@@ -162,6 +195,14 @@ export default function SettingsTab({
     let finalSec = newSector;
     let finalDiv = parseFloat(newYield);
     let finalPay = parseFloat(newPayout);
+    let finalRoe = parseFloat(newRoe);
+    let finalDeRatio = parseFloat(newDeRatio);
+    let finalFairValue = parseFloat(newFairValue);
+    let finalDivGrowthYears = parseInt(newDivGrowthYears);
+    let finalDivGrowthRate = parseFloat(newDivGrowthRate);
+    let finalFreeCashFlowPositive = newFreeCashFlowPositive;
+    let finalNim = newSector === 'ธนาคาร' ? parseFloat(newNim) : undefined;
+    let finalNpl = newSector === 'ธนาคาร' ? parseFloat(newNpl) : undefined;
 
     // หากปุ่มฟอร์มหลักหรือปันผลยังเป็น 4.5/60/ไม่มีชื่อ (ค่าดีฟอลต์) แสดงว่าผู้ใช้ไม่ได้ระบุค่าเองตัว
     // เราจะดึงข้อมูลจริงจากตลาดหุ้น SET มาอำนวยความสะดวกให้
@@ -175,6 +216,14 @@ export default function SettingsTab({
             finalSec = fetched.sector || finalSec;
             finalDiv = (fetched.dividendYield3Yr !== null && fetched.dividendYield3Yr !== undefined) ? fetched.dividendYield3Yr : finalDiv;
             finalPay = (fetched.payoutRatio !== null && fetched.payoutRatio !== undefined) ? fetched.payoutRatio : finalPay;
+            finalRoe = (fetched.roe !== null && fetched.roe !== undefined) ? fetched.roe : finalRoe;
+            finalDeRatio = (fetched.deRatio !== null && fetched.deRatio !== undefined) ? fetched.deRatio : finalDeRatio;
+            finalFairValue = (fetched.fairValue !== null && fetched.fairValue !== undefined) ? fetched.fairValue : finalFairValue;
+            finalDivGrowthYears = (fetched.dividendGrowthYears !== null && fetched.dividendGrowthYears !== undefined) ? fetched.dividendGrowthYears : finalDivGrowthYears;
+            finalDivGrowthRate = (fetched.dividendGrowthRate !== null && fetched.dividendGrowthRate !== undefined) ? fetched.dividendGrowthRate : finalDivGrowthRate;
+            finalFreeCashFlowPositive = (fetched.freeCashFlowPositive !== null && fetched.freeCashFlowPositive !== undefined) ? fetched.freeCashFlowPositive : finalFreeCashFlowPositive;
+            finalNim = (fetched.nim !== null && fetched.nim !== undefined) ? fetched.nim : finalNim;
+            finalNpl = (fetched.npl !== null && fetched.npl !== undefined) ? fetched.npl : finalNpl;
           }
         }
       } catch (err) {
@@ -187,6 +236,13 @@ export default function SettingsTab({
     }
     if (isNaN(finalDiv) || finalDiv < 0) finalDiv = 4.5;
     if (isNaN(finalPay) || finalPay < 0) finalPay = 60;
+    if (isNaN(finalRoe)) finalRoe = 12.5;
+    if (isNaN(finalDeRatio) || finalDeRatio < 0) finalDeRatio = 1.2;
+    if (isNaN(finalFairValue) || finalFairValue < 0) finalFairValue = 10.0;
+    if (isNaN(finalDivGrowthYears) || finalDivGrowthYears < 0) finalDivGrowthYears = 3;
+    if (isNaN(finalDivGrowthRate)) finalDivGrowthRate = 5.0;
+    if (isNaN(finalNim)) finalNim = undefined;
+    if (isNaN(finalNpl)) finalNpl = undefined;
 
     // สร้างข้อมูลราคาย้อนหลังจำลอง 75 ราคา
     const generatedHistory = generateHistoricalPrices(cleanSym, 10);
@@ -201,7 +257,15 @@ export default function SettingsTab({
       currentPrice: lastPrice,
       historicalPrices: generatedHistory,
       rsi5: null,
-      sma60: null
+      sma60: null,
+      roe: finalRoe,
+      deRatio: finalDeRatio,
+      fairValue: finalFairValue,
+      dividendGrowthYears: finalDivGrowthYears,
+      dividendGrowthRate: finalDivGrowthRate,
+      freeCashFlowPositive: finalFreeCashFlowPositive,
+      nim: finalNim,
+      npl: finalNpl
     };
 
     const updatedList = [...localStocks, newStockItem];
@@ -215,6 +279,14 @@ export default function SettingsTab({
     setNewName('');
     setNewYield('4.5');
     setNewPayout('60');
+    setNewRoe('12.5');
+    setNewDeRatio('1.2');
+    setNewFairValue('10.0');
+    setNewDivGrowthYears('3');
+    setNewDivGrowthRate('5.0');
+    setNewFreeCashFlowPositive(true);
+    setNewNim('3.0');
+    setNewNpl('3.0');
     setIsFetchingInfo(false);
   };
 
@@ -225,12 +297,27 @@ export default function SettingsTab({
     setEditSector(stock.sector || 'อื่นๆ');
     setEditYield((stock.dividendYield3Yr || 0).toString());
     setEditPayout((stock.payoutRatio || 0).toString());
+    setEditRoe((stock.roe || 0).toString());
+    setEditDeRatio((stock.deRatio || 0).toString());
+    setEditFairValue((stock.fairValue || 0).toString());
+    setEditDivGrowthYears((stock.dividendGrowthYears || 0).toString());
+    setEditDivGrowthRate((stock.dividendGrowthRate || 0).toString());
+    setEditFreeCashFlowPositive(stock.freeCashFlowPositive !== undefined ? stock.freeCashFlowPositive : true);
+    setEditNim((stock.nim || 0).toString());
+    setEditNpl((stock.npl || 0).toString());
   };
 
   // คืนค่าบันทึกถันไปเมื่อแก้ไขเสร็จสิ้น
   const handleSaveEdit = (symbol: string) => {
     const yieldNum = parseFloat(editYield);
     const payoutNum = parseFloat(editPayout);
+    const roeNum = parseFloat(editRoe);
+    const deRatioNum = parseFloat(editDeRatio);
+    const fairValueNum = parseFloat(editFairValue);
+    const divGrowthYearsNum = parseInt(editDivGrowthYears);
+    const divGrowthRateNum = parseFloat(editDivGrowthRate);
+    const nimNum = editSector === 'ธนาคาร' ? parseFloat(editNim) : undefined;
+    const nplNum = editSector === 'ธนาคาร' ? parseFloat(editNpl) : undefined;
 
     if (isNaN(yieldNum) || yieldNum < 0) {
       alert("กรุณากรอกอัตราปันผลเป็นตัวเลขที่เป็นบวก");
@@ -238,6 +325,26 @@ export default function SettingsTab({
     }
     if (isNaN(payoutNum) || payoutNum < 0) {
       alert("กรุณากรอกอัตราจ่ายคืนกำไรเป็นตัวเลขที่เป็นบวก");
+      return;
+    }
+    if (isNaN(roeNum)) {
+      alert("กรุณากรอก ROE เป็นตัวเลข");
+      return;
+    }
+    if (isNaN(deRatioNum) || deRatioNum < 0) {
+      alert("กรุณากรอก D/E เป็นตัวเลขที่เป็นบวก");
+      return;
+    }
+    if (isNaN(fairValueNum) || fairValueNum < 0) {
+      alert("กรุณากรอกมูลค่าที่แท้จริงเป็นตัวเลขที่เป็นบวก");
+      return;
+    }
+    if (isNaN(divGrowthYearsNum) || divGrowthYearsNum < 0) {
+      alert("กรุณากรอกจำนวนปีจ่ายปันผลเป็นตัวเลขที่เป็นบวก");
+      return;
+    }
+    if (isNaN(divGrowthRateNum)) {
+      alert("กรุณากรอกอัตราเติบโตปันผลเป็นตัวเลข");
       return;
     }
 
@@ -248,7 +355,15 @@ export default function SettingsTab({
           name: editName.trim() || s.name,
           sector: editSector || s.sector,
           dividendYield3Yr: yieldNum,
-          payoutRatio: payoutNum
+          payoutRatio: payoutNum,
+          roe: roeNum,
+          deRatio: deRatioNum,
+          fairValue: fairValueNum,
+          dividendGrowthYears: divGrowthYearsNum,
+          dividendGrowthRate: divGrowthRateNum,
+          freeCashFlowPositive: editFreeCashFlowPositive,
+          nim: nimNum,
+          npl: nplNum
         };
       }
       return s;
@@ -304,10 +419,15 @@ export default function SettingsTab({
     const tsVal = parseFloat(trailingStop);
     const bfVal = parseFloat(brokerFee);
     const vatVal = parseFloat(vat);
+    const mosVal = parseFloat(requireMOSPercent);
 
     // ตรวจสอบความถูกต้องเบื้องต้น
     if (isNaN(capitalVal) || capitalVal <= 0) {
       setErrorMsg("ยอดเงินทุนตั้งต้น ต้องเป็นตัวเลขมากกว่า 0");
+      return;
+    }
+    if (isNaN(mosVal) || mosVal < 0 || mosVal > 100) {
+      setErrorMsg("ส่วนเผื่อความปลอดภัย (Margin of Safety) ต้องอยู่ระหว่าง 0% ถึง 100%");
       return;
     }
     if (!isTrancheSumBalanced) {
@@ -333,7 +453,9 @@ export default function SettingsTab({
       vatPercent: vatVal,
       timeframe: timeframe,
       enableWebNotifications: enableWebNotifications,
-      notificationCheckInterval: notificationCheckInterval
+      notificationCheckInterval: notificationCheckInterval,
+      requireMOSPercent: mosVal,
+      bennerCashAllocation: bennerCashAllocation
     });
 
     setSuccessMsg("บันทึกการตั้งค่าแผนกลยุทธ์ใหม่เรียบร้อยแล้ว!");
@@ -484,6 +606,35 @@ export default function SettingsTab({
                 <option value="W1">W1: กราฟรายสัปดาห์</option>
                 <option value="M1">M1: กราฟรายเดือน</option>
               </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 mb-1">ส่วนเผื่อความปลอดภัยขั้นต่ำที่ต้องการ (Margin of Safety %)</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={requireMOSPercent}
+                  onChange={(e) => setRequireMOSPercent(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <span className="absolute right-3 top-2 text-slate-400 text-sm font-bold">%</span>
+              </div>
+              <span className="text-[10px] text-slate-400 mt-1 block">
+                ซื้อเมื่อราคามีส่วนลดจากมูลค่าที่แท้จริง $\ge$ เปอร์เซ็นต์นี้ (ค่าแนะนำ: 20%)
+              </span>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 mb-1">จัดสรรเงินสดสำรองตาม Benner Cycle (Cash Adviser)</label>
+              <select
+                value={bennerCashAllocation ? "true" : "false"}
+                onChange={(e) => setBennerCashAllocation(e.target.value === "true")}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-800 bg-white font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+              >
+                <option value="true">เปิดใช้งานคำแนะนำ Cash Allocation</option>
+                <option value="false">ปิดคำแนะนำ/อิงแผนพอร์ตปกติ</option>
+              </select>
+              <span className="text-[10px] text-slate-400 mt-1 block">
+                แนะนำสัดส่วนเงินสดตามวัฏจักรเศรษฐกิจ (Good Times: 40%, Stagnation: 25%, Crash: 10%)
+              </span>
             </div>
           </div>
 
@@ -774,7 +925,7 @@ export default function SettingsTab({
                 เพิ่มหุ้นตัวใหม่ในพอร์ตจำลอง
               </h5>
               
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 mb-0.5">ชื่อย่อหุ้น (Symbol)*</label>
                   <input
@@ -823,8 +974,8 @@ export default function SettingsTab({
                     className="w-full px-2.5 py-1.5 border border-slate-250 bg-white rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
-                <div className="col-span-2 md:col-span-1">
-                  <label className="block text-[10px] font-bold text-slate-500 mb-0.5">Payout Ratio (%)*</label>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-0.5">Payout (%)*</label>
                   <input
                     type="number"
                     step="0.1"
@@ -832,6 +983,99 @@ export default function SettingsTab({
                     value={newPayout}
                     onChange={(e) => setNewPayout(e.target.value)}
                     className="w-full px-2.5 py-1.5 border border-slate-250 bg-white rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-0.5">ROE (%)*</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="12.5"
+                    value={newRoe}
+                    onChange={(e) => setNewRoe(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-slate-250 bg-white rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="col-span-2 md:col-span-1">
+                  <label className="block text-[10px] font-bold text-slate-500 mb-0.5">D/E (เท่า)*</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="1.2"
+                    value={newDeRatio}
+                    onChange={(e) => setNewDeRatio(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-slate-250 bg-white rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* ข้อมูลพื้นฐานเชิงคุณภาพ (VI Metrics Extra) */}
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-3 pt-2 border-t border-dashed border-slate-250">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-0.5">มูลค่าแท้จริง (Fair Value)*</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="10.0"
+                    value={newFairValue}
+                    onChange={(e) => setNewFairValue(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-slate-250 bg-white rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-0.5">ปันผลโตต่อเนื่อง (ปี)*</label>
+                  <input
+                    type="number"
+                    placeholder="3"
+                    value={newDivGrowthYears}
+                    onChange={(e) => setNewDivGrowthYears(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-slate-250 bg-white rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-0.5">โตปันผล 5 ปี (%/ปี)*</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="5.0"
+                    value={newDivGrowthRate}
+                    onChange={(e) => setNewDivGrowthRate(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-slate-250 bg-white rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-0.5">กระแสเงินสด FCF*</label>
+                  <select
+                    value={newFreeCashFlowPositive ? "true" : "false"}
+                    onChange={(e) => setNewFreeCashFlowPositive(e.target.value === "true")}
+                    className="w-full px-2.5 py-1.5 border border-slate-250 bg-white rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer animate-none"
+                  >
+                    <option value="true">FCF เป็นบวก (+)</option>
+                    <option value="false">FCF ติดลบ (-)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-0.5">NIM (%) {newSector !== 'ธนาคาร' && '(ไม่ใช้)'}</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="3.0"
+                    disabled={newSector !== 'ธนาคาร'}
+                    value={newNim}
+                    onChange={(e) => setNewNim(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-slate-250 bg-white disabled:bg-slate-100 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-0.5">NPL (%) {newSector !== 'ธนาคาร' && '(ไม่ใช้)'}</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="3.0"
+                    disabled={newSector !== 'ธนาคาร'}
+                    value={newNpl}
+                    onChange={(e) => setNewNpl(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-slate-250 bg-white disabled:bg-slate-100 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
               </div>
@@ -893,6 +1137,12 @@ export default function SettingsTab({
                       <th className="py-2.5 px-3">หมวด (Sector)</th>
                       <th className="py-2.5 px-3 text-right">ปันผล 3 ปี (%)</th>
                       <th className="py-2.5 px-3 text-right">Payout (%)</th>
+                      <th className="py-2.5 px-3 text-right">ROE (%)</th>
+                      <th className="py-2.5 px-3 text-right">D/E (เท่า)</th>
+                      <th className="py-2.5 px-3 text-right">มูลค่าแท้จริง (บาท)</th>
+                      <th className="py-2.5 px-3 text-right">ปันผลโต (ปี/%)</th>
+                      <th className="py-2.5 px-3 text-center">FCF</th>
+                      <th className="py-2.5 px-3 text-right">NIM/NPL (%)</th>
                       <th className="py-2.5 px-3 text-center w-24">จัดการ</th>
                     </tr>
                   </thead>
@@ -977,6 +1227,142 @@ export default function SettingsTab({
                                 />
                               ) : (
                                 `${(stock.payoutRatio || 0).toFixed(1)}%`
+                              )}
+                            </td>
+
+                            {/* ROE */}
+                            <td className="py-2 px-3 text-right font-mono text-slate-800">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  value={editRoe}
+                                  onChange={(e) => setEditRoe(e.target.value)}
+                                  className="w-16 px-1.5 py-1 border border-slate-200 rounded text-right text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                              ) : (
+                                `${(stock.roe !== undefined && stock.roe !== null) ? stock.roe.toFixed(2) : '-'}%`
+                              )}
+                            </td>
+
+                            {/* D/E Ratio */}
+                            <td className="py-2 px-3 text-right font-mono text-slate-800">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editDeRatio}
+                                  onChange={(e) => setEditDeRatio(e.target.value)}
+                                  className="w-16 px-1.5 py-1 border border-slate-200 rounded text-right text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                              ) : (
+                                `${(stock.deRatio !== undefined && stock.deRatio !== null) ? stock.deRatio.toFixed(2) : '-'} เท่า`
+                              )}
+                            </td>
+
+                            {/* Fair Value */}
+                            <td className="py-2 px-3 text-right text-slate-800">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editFairValue}
+                                  onChange={(e) => setEditFairValue(e.target.value)}
+                                  className="w-16 px-1.5 py-1 border border-slate-200 rounded text-right text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                              ) : (
+                                <div className="flex items-center justify-end gap-1 font-mono">
+                                  <span>{(stock.fairValue || 0).toFixed(2)} บาท</span>
+                                  {onOpenValuationCalculator && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenValuationCalculator(stock.symbol)}
+                                      className="p-0.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                                      title="คำนวณมูลค่าเหมาะสม"
+                                    >
+                                      <Calculator className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Div Growth */}
+                            <td className="py-2 px-3 text-right font-mono text-slate-800">
+                              {isEditing ? (
+                                <div className="flex gap-1 justify-end">
+                                  <input
+                                    type="number"
+                                    value={editDivGrowthYears}
+                                    onChange={(e) => setEditDivGrowthYears(e.target.value)}
+                                    className="w-10 px-1 py-1 border border-slate-200 rounded text-center text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                                    title="จำนวนปีโตต่อเนื่อง"
+                                  />
+                                  <span className="text-slate-400 self-center">/</span>
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    value={editDivGrowthRate}
+                                    onChange={(e) => setEditDivGrowthRate(e.target.value)}
+                                    className="w-12 px-1 py-1 border border-slate-200 rounded text-right text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                                    title="อัตราเติบโต %"
+                                  />
+                                </div>
+                              ) : (
+                                `${stock.dividendGrowthYears || 0} ปี / ${(stock.dividendGrowthRate || 0).toFixed(1)}%`
+                              )}
+                            </td>
+
+                            {/* FCF */}
+                            <td className="py-2 px-3 text-center">
+                              {isEditing ? (
+                                <select
+                                  value={editFreeCashFlowPositive ? "true" : "false"}
+                                  onChange={(e) => setEditFreeCashFlowPositive(e.target.value === "true")}
+                                  className="px-1 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                                >
+                                  <option value="true">+</option>
+                                  <option value="false">-</option>
+                                </select>
+                              ) : (
+                                stock.freeCashFlowPositive ? (
+                                  <span className="text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">บวก (+)</span>
+                                ) : (
+                                  <span className="text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded text-[10px]">ลบ (-)</span>
+                                )
+                              )}
+                            </td>
+
+                            {/* NIM/NPL */}
+                            <td className="py-2 px-3 text-right font-mono text-slate-800">
+                              {isEditing ? (
+                                <div className="flex gap-1 justify-end">
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    value={editNim}
+                                    disabled={editSector !== 'ธนาคาร'}
+                                    onChange={(e) => setEditNim(e.target.value)}
+                                    className="w-12 px-1 py-1 border border-slate-200 rounded text-right text-xs font-mono disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                                    title="NIM %"
+                                  />
+                                  <span className="text-slate-400 self-center">/</span>
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    value={editNpl}
+                                    disabled={editSector !== 'ธนาคาร'}
+                                    onChange={(e) => setEditNpl(e.target.value)}
+                                    className="w-12 px-1 py-1 border border-slate-200 rounded text-right text-xs font-mono disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                                    title="NPL %"
+                                  />
+                                </div>
+                              ) : (
+                                stock.sector === 'ธนาคาร' ? (
+                                  `${(stock.nim || 0).toFixed(1)}% / ${(stock.npl || 0).toFixed(1)}%`
+                                ) : (
+                                  <span className="text-slate-400">-</span>
+                                )
                               )}
                             </td>
 

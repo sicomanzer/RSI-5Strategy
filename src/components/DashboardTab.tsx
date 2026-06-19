@@ -8,6 +8,80 @@ import { StockInfo, ActiveHolding, TransactionRecord, SystemSettings } from '../
 import { evaluateHoldingSummary } from '../utils/calculations';
 import { Wallet, DollarSign, ArrowUpRight, TrendingUp, Sparkles, PieChart, BarChart2, ShieldAlert, Coins, Target, Calculator, CalendarRange, Sparkle } from 'lucide-react';
 
+interface CycleYearInfo {
+  year: number;
+  phase: 'A' | 'B' | 'C';
+  phaseName: string;
+  recommendation: string;
+  desc: string;
+  color: string;
+  bgClass: string;
+  borderClass: string;
+}
+
+const BENNER_CYCLE_DATA: { [key: number]: CycleYearInfo } = {
+  2019: {
+    year: 2019,
+    phase: 'A',
+    phaseName: 'Panic Year (ปีวิกฤตและจุดต่ำสุด)',
+    recommendation: 'ช่วงวิกฤตหนัก ราคาหุ้นร่วงลึก / ทยอยช้อนซื้อสินทรัพย์ราคาถูก (Buy Aggressively)',
+    desc: 'เป็นปีที่มีความตื่นตระหนกทางการเงิน ตลาดตกลงสู่จุดต่ำสุด เป็นโอกาสอันยอดเยี่ยมในการใช้เงินสดสะสมเข้าช้อนซื้อหุ้นพื้นฐานดีเกรด A ในราคาลดกระหน่ำ',
+    color: '#ef4444',
+    bgClass: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    borderClass: 'border-rose-500'
+  },
+  2023: {
+    year: 2023,
+    phase: 'C',
+    phaseName: 'Hard Times (ช่วงเวลาฟื้นตัวและสะสม)',
+    recommendation: 'เศรษฐกิจซบเซาแต่ราคาเริ่มฟื้นตัว / เน้นสะสมหุ้นปันผลเด่นระยะยาว (Accumulate)',
+    desc: 'ช่วงเวลาที่ตลาดราคาอยู่ในเกณฑ์ต่ำและฟื้นตัวช้าๆ เหมาะสำหรับการซื้อหุ้นสะสมด้วยวินัย (DCA) และเน้นการลงทุนทบต้นเพื่อรับปันผลอย่างสม่ำเสมอ',
+    color: '#3b82f6',
+    bgClass: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    borderClass: 'border-blue-500'
+  },
+  2026: {
+    year: 2026,
+    phase: 'B',
+    phaseName: 'Good Times (ปีทอง/ยอดสูงสุด)',
+    recommendation: 'ตลาดร้อนแรง ราคาหุ้นขึ้นสูง / เน้นทยอยขายทำกำไรและสำรองเงินสด (Sell/Hold Cash)',
+    desc: 'เป็นปีที่คาดว่าราคาจะขยับขึ้นสูงจนถึงยอดคลื่นของวัฏจักร แนะนำนักลงทุนเน้นความระมัดระวัง ทยอยแบ่งขายทำกำไรหุ้นที่ขึ้นแรง และเพิ่มสัดส่วนเงินสดสำรองเพื่อรอโอกาสปรับฐานใหญ่',
+    color: '#f59e0b',
+    bgClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    borderClass: 'border-amber-500'
+  },
+  2032: {
+    year: 2032,
+    phase: 'C',
+    phaseName: 'Hard Times (ปีชะลอตัวและช้อนซื้อ)',
+    recommendation: 'ตลาดตกต่ำเป็นรอบย่อย / เหมาะสำหรับสะสมของถูกรอบใหม่ (Buy/Hold)',
+    desc: 'วัฏจักรเศรษฐกิจเข้าสู่จุดซบเซา ราคาตลาดจะลดต่ำลงอีกครั้ง ถือเป็นรอบการกวาดซื้อสินทรัพย์ราคาถูกและหุ้นยิวสูงเพื่อสะสมทบต้นรอบใหญ่',
+    color: '#3b82f6',
+    bgClass: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    borderClass: 'border-blue-500'
+  },
+  2034: {
+    year: 2034,
+    phase: 'B',
+    phaseName: 'Good Times (ปีราคาขึ้นสูงสุดรอง)',
+    recommendation: 'ราคาสินทรัพย์ขยับขึ้นสูงเป็นยอดคลื่นย่อย / ล็อกกำไรและสะสมกระสุน (Take Profit)',
+    desc: 'ราคาขยับขึ้นสู่ยอดคลื่นก่อนเข้าปีวิกฤตตื่นตระหนกใหญ่ในปีถัดไป แนะนำเน้นปรับพอร์ตให้ปลอดภัยสูง ลดอัตราทด และเตรียมเงินสดล่วงหน้า',
+    color: '#f59e0b',
+    bgClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    borderClass: 'border-amber-500'
+  },
+  2035: {
+    year: 2035,
+    phase: 'A',
+    phaseName: 'Panic Year (ปีวิกฤตใหญ่รอบใหม่)',
+    recommendation: 'วิกฤตเศรษฐกิจและการล้างไพ่ตลาด / ถือเงินสดพร้อมเข้าช้อนซื้อไม้ใหญ่สุด (Great Panic Buy)',
+    desc: 'ปีที่เป็นจุดต่ำสุดครั้งใหญ่ตามพยากรณ์เบนเนอร์ คาดว่าจะมีความตื่นตระหนกทางการเงินอย่างรุนแรง ตลาดเกิดความสูญเสีย แต่คือโอกาสทองที่สุดในรอบทศวรรษสำหรับสาย VI ตัวจริง',
+    color: '#ef4444',
+    bgClass: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    borderClass: 'border-rose-500'
+  }
+};
+
 interface DashboardTabProps {
   stocks: StockInfo[];
   holdings: ActiveHolding[];
@@ -23,6 +97,7 @@ export default function DashboardTab({
 }: DashboardTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'dividends'>('analytics');
   const [dividendTarget, setDividendTarget] = useState<number>(10000); // เป้าหมายปันผลสะสมรายปีเริ่มต้น (บาท)
+  const [selectedCycleYear, setSelectedCycleYear] = useState<number>(2026);
   
   // 1. คำนวณเงินสดคงเหลือและผลรวม
   // เงินสดในระบบ = ทุนตั้งต้น - ผลรวมการซื้อทั้งหมด + ผลรวมการขายทั้งหมด
@@ -36,7 +111,15 @@ export default function DashboardTab({
     .filter(tx => tx.type === 'SELL')
     .reduce((sum, tx) => sum + tx.totalAmount, 0);
 
-  const currentCash = totalStartingCapital - totalByBuy + totalBySell;
+  const totalByDividend = transactions
+    .filter(tx => tx.type === 'DIVIDEND')
+    .reduce((sum, tx) => sum + tx.totalAmount, 0);
+
+  const totalReinvested = transactions
+    .filter(tx => tx.type === 'BUY' && tx.tranche === 'ปันผลทบต้น')
+    .reduce((sum, tx) => sum + tx.totalAmount, 0);
+
+  const currentCash = totalStartingCapital - totalByBuy + totalBySell + totalByDividend;
 
   // 2. คำนวณมูลค่าหุ้นถือครองปัจจุบัน และเงินปันผลคาดหวังรวม
   let totalHoldingsMarketValue = 0;
@@ -139,12 +222,44 @@ export default function DashboardTab({
   const goalProgressPercent = Math.min((expectedAnnualDividends / Math.max(1, dividendTarget)) * 100, 100);
   const extraDividendNeeded = Math.max(0, dividendTarget - expectedAnnualDividends);
   const estimatedExtraCapitalNeeded = portfolioWeightedYield > 0 ? (extraDividendNeeded / (portfolioWeightedYield / 100)) : 0;
+  const reinvestmentRate = totalByDividend > 0 ? (totalReinvested / totalByDividend) * 100 : 0;
+
+  // คำนวณสถิติเพื่อใช้ใน Dividend Safety Tracker
+  const totalHeldStocks = heldStocksList.length;
+  let totalGrowthYears = 0;
+  let totalGrowthRate = 0;
+  let fcfPositiveCount = 0;
+  const highPayoutStocks: string[] = [];
+
+  heldStocksList.forEach(item => {
+    const originalStock = stocks.find(s => s.symbol === item.symbol);
+    if (originalStock) {
+      totalGrowthYears += originalStock.dividendGrowthYears ?? 0;
+      totalGrowthRate += originalStock.dividendGrowthRate ?? 0;
+      if (originalStock.freeCashFlowPositive) {
+        fcfPositiveCount++;
+      }
+      if (originalStock.payoutRatio > 80) {
+        highPayoutStocks.push(originalStock.symbol);
+      }
+    }
+  });
+
+  const avgGrowthYears = totalHeldStocks > 0 ? (totalGrowthYears / totalHeldStocks) : 0;
+  const avgGrowthRate = totalHeldStocks > 0 ? (totalGrowthRate / totalHeldStocks) : 0;
+  const fcfPositivePercent = totalHeldStocks > 0 ? (fcfPositiveCount / totalHeldStocks) * 100 : 0;
+
+  // สำหรับการวิเคราะห์เงินสดตามรอบวัฏจักร Benner
+  const actualCashPercent = totalNetAssetValue > 0 ? (currentCash / totalNetAssetValue) * 100 : 100;
+  const selectedYearPhase = selectedCycleYear === 2019 || selectedCycleYear === 2035 ? 'A' : (selectedCycleYear === 2026 || selectedCycleYear === 2034 ? 'B' : 'C');
+  const recommendedCash = selectedYearPhase === 'B' ? 40 : (selectedYearPhase === 'C' ? 25 : 10);
+  const isCashAlert = selectedCycleYear === 2026 && actualCashPercent < recommendedCash;
 
   return (
     <div className="space-y-6">
       
       {/* ส่วนสรุปตัวเลขหลัก (Bento Box Stats Grid) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         
         {/* ทุนเริ่มต้นกระดาน */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center gap-4">
@@ -153,7 +268,7 @@ export default function DashboardTab({
           </div>
           <div>
             <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider font-sans">เงินทุนตั้งต้น</span>
-            <span className="text-lg font-bold font-mono text-slate-900">{totalStartingCapital.toLocaleString()} ฿</span>
+            <span className="text-lg font-bold font-mono text-slate-900" style={{ whiteSpace: 'nowrap' }}>{totalStartingCapital.toLocaleString()} ฿</span>
           </div>
         </div>
 
@@ -164,7 +279,18 @@ export default function DashboardTab({
           </div>
           <div>
             <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider font-sans">เงินสดคงเหลือสะสม</span>
-            <span className="text-lg font-bold font-mono text-slate-800">{currentCash.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</span>
+            <span className="text-lg font-bold font-mono text-slate-800" style={{ whiteSpace: 'nowrap' }}>{currentCash.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</span>
+          </div>
+        </div>
+
+        {/* ยอดปันผลที่ได้รับสะสมจริง */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center gap-4">
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
+            <Coins className="h-5 w-5" />
+          </div>
+          <div>
+            <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider font-sans">ปันผลสะสมรับจริง (DRIP)</span>
+            <span className="text-lg font-bold font-mono text-emerald-700" style={{ whiteSpace: 'nowrap' }}>+{totalByDividend.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</span>
           </div>
         </div>
 
@@ -175,7 +301,7 @@ export default function DashboardTab({
           </div>
           <div>
             <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider font-sans">มูลค่าพอร์ตหุ้นปัจจุบัน</span>
-            <span className="text-lg font-bold font-mono text-emerald-700">{totalHoldingsMarketValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</span>
+            <span className="text-lg font-bold font-mono text-emerald-700" style={{ whiteSpace: 'nowrap' }}>{totalHoldingsMarketValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</span>
           </div>
         </div>
 
@@ -186,7 +312,7 @@ export default function DashboardTab({
           </div>
           <div className="z-10">
             <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider font-sans">สินทรัพย์รวม (NAV)</span>
-            <span className="text-lg font-bold font-mono text-white">{totalNetAssetValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</span>
+            <span className="text-lg font-bold font-mono text-white" style={{ whiteSpace: 'nowrap' }}>{totalNetAssetValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</span>
           </div>
           <div className="absolute right-[-10px] top-[-10px] text-slate-800/40 font-bold text-7xl select-none font-mono">฿</div>
         </div>
@@ -198,7 +324,7 @@ export default function DashboardTab({
           </div>
           <div>
             <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider font-sans">ปันผลเฉลี่ยต่อปี (Est.)</span>
-            <span className="text-lg font-bold font-mono text-emerald-700">+{expectedAnnualDividends.toLocaleString(undefined, {maximumFractionDigits: 2})} ฿</span>
+            <span className="text-lg font-bold font-mono text-emerald-700" style={{ whiteSpace: 'nowrap' }}>+{expectedAnnualDividends.toLocaleString(undefined, {maximumFractionDigits: 2})} ฿</span>
           </div>
         </div>
       </div>
@@ -216,6 +342,173 @@ export default function DashboardTab({
           <span className="font-mono text-sm font-bold bg-white/60 px-2 py-0.5 rounded-md mt-1 inline-block">
             {netProfitOrLoss >= 0 ? '🟢 กำไรสุทธิ' : '🔴 ขาดทุนสะสม'} {netReturnPercent.toFixed(2)} %
           </span>
+        </div>
+      </div>
+
+      {/* 🌀 Benner Cycle Macro Widget */}
+      <div className="bg-slate-900 border border-slate-800 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
+        {/* Glow decoration */}
+        <div className="absolute right-0 top-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute left-0 bottom-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-4 mb-5">
+          <div>
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <Sparkle className="h-4.5 w-4.5 text-emerald-400" />
+              ทฤษฎี Benner Cycle (วงจรคลื่นเศรษฐกิจมหภาคระดับ 54 ปี)
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-1 font-sans">
+              Samuel Benner (1875): พยากรณ์รอบวัฏจักรฟองสบู่และวิกฤตของราคาสินทรัพย์ เพื่อนำมาปรับแผนสะสมพอร์ต VI ร่วมกับ RSI-5
+            </p>
+          </div>
+          <span className="text-[10px] bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-0.5 rounded-full font-bold">
+            สถานะปีปัจจุบัน: B - Good Times 📈
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+          {/* ฝั่งซ้าย: ไทม์ไลน์ปีสำคัญ (Interactive Timeline) */}
+          <div className="lg:col-span-7 space-y-4">
+            <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">แถบช่วงเวลาวัฏจักร (คลิกเลือกปีเพื่อดูรายละเอียด)</span>
+            
+            <div className="relative py-8 px-4 bg-slate-950/40 rounded-xl border border-slate-800/80 flex flex-row justify-between items-center gap-2 select-none overflow-x-auto min-w-[320px]">
+              {/* Connecting Line */}
+              <div className="absolute left-6 right-6 top-1/2 h-0.5 bg-slate-800 -translate-y-1/2 z-0"></div>
+
+              {Object.values(BENNER_CYCLE_DATA).map((info) => {
+                const isCurrent = info.year === 2026;
+                const isSelected = info.year === selectedCycleYear;
+                
+                return (
+                  <div 
+                    key={info.year} 
+                    onClick={() => setSelectedCycleYear(info.year)}
+                    className="relative flex flex-col items-center cursor-pointer z-10 group"
+                  >
+                    {/* Pulsing indicator for current year */}
+                    {isCurrent && (
+                      <span className="absolute -top-7 left-1/2 transform -translate-x-1/2 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                    )}
+
+                    {/* Node circle */}
+                    <div 
+                      className={`h-7 w-7 rounded-full flex items-center justify-center font-bold text-[10px] transition-all duration-300 ${
+                        isSelected 
+                          ? 'bg-slate-100 text-slate-950 scale-110 shadow-md ring-4 ring-emerald-500/20' 
+                          : 'bg-slate-900 border border-slate-700 text-slate-400 hover:border-slate-400 hover:text-slate-100'
+                      }`}
+                      style={!isSelected ? { borderColor: info.color } : {}}
+                    >
+                      {info.phase}
+                    </div>
+
+                    {/* Year text */}
+                    <span className={`text-[10px] font-bold mt-2 font-mono ${
+                      isSelected ? 'text-slate-100' : 'text-slate-500 group-hover:text-slate-300'
+                    }`}>
+                      {info.year}
+                    </span>
+
+                    {/* Current tag text */}
+                    {isCurrent && (
+                      <span className="absolute -bottom-5 text-[8px] bg-emerald-950 text-emerald-400 border border-emerald-800/40 px-1 rounded-sm whitespace-nowrap font-bold">
+                        ปัจจุบัน
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ฝั่งขวา: รายละเอียดและการวิเคราะห์ (Details Box) */}
+          {(() => {
+            const info = BENNER_CYCLE_DATA[selectedCycleYear];
+            return (
+              <div className="lg:col-span-5 bg-slate-950/60 border border-slate-800/80 rounded-xl p-4.5 flex flex-col justify-between space-y-4">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start">
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">วิเคราะห์รอบวัฏจักร {info.year}</span>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${info.bgClass}`}>
+                      {info.phaseName}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <span className="text-xs font-bold text-slate-400 block">แนวปฏิบัติเชิงกลยุทธ์ (VI + Technical Action):</span>
+                    <p className="text-xs font-bold font-sans text-emerald-400 leading-relaxed">
+                      👉 {info.recommendation}
+                    </p>
+                  </div>
+
+                  <div className="border-t border-slate-800/80 pt-2.5 space-y-1">
+                    <span className="text-[10px] text-slate-500 font-bold">คำอธิบายภาพรวม:</span>
+                    <p className="text-xs text-slate-400 leading-relaxed font-sans font-medium">
+                      {info.desc}
+                    </p>
+                  </div>
+                </div>
+
+                {/* แถบแจ้งเตือนพิเศษเมื่อเป็นปีปัจจุบัน */}
+                {selectedCycleYear === 2026 && (
+                  <div className="p-2.5 bg-amber-500/5 border border-amber-500/10 rounded-lg text-[10px] text-amber-400/90 leading-relaxed font-medium">
+                    ⚠️ <strong>ข้อความระวังจากคุณกวี (VI Mode):</strong> แม้จะมีหุ้นที่ RSI5 ตกมาให้ช้อนซื้อรายตัว แต่เนื่องจากปี 2026 อยู่ในช่วง Good Times ที่ดัชนีภาพรวมอยู่ในโซนสูง ควรคุมสัดส่วนการลงทุนและสำรองกระสุนสดให้หนาแน่น เลี่ยงการใส่เต็มพอร์ต!
+                  </div>
+                )}
+
+                {/* Benner Cash Allocation Adviser */}
+                {settings.bennerCashAllocation && (
+                  <div className="border-t border-slate-800/80 pt-3.5 space-y-2">
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider flex items-center gap-1">
+                      <Coins className="h-3.5 w-3.5 text-amber-400" />
+                      Benner Cash Allocation adviser
+                    </span>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-400">สัดส่วนเงินสดในพอร์ตจริง:</span>
+                      <span className={`font-mono font-bold ${actualCashPercent >= recommendedCash ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {actualCashPercent.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-400">สัดส่วนแนะนำเฟส {info.phase} ({info.year}):</span>
+                      <span className="font-mono font-bold text-slate-200">
+                        {recommendedCash}%
+                      </span>
+                    </div>
+                    
+                    {/* Progress Bar Comparison */}
+                    <div className="relative w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                      {/* Recommended marker */}
+                      <div 
+                        className="absolute top-0 bottom-0 w-0.5 bg-slate-500/80 z-10 animate-pulse"
+                        style={{ left: `${recommendedCash}%` }}
+                        title={`เกณฑ์แนะนำ: ${recommendedCash}%`}
+                      ></div>
+                      {/* Actual Cash Fill */}
+                      <div 
+                        className={`h-full rounded-full transition-all duration-500 ${actualCashPercent >= recommendedCash ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                        style={{ width: `${actualCashPercent}%` }}
+                      ></div>
+                    </div>
+
+                    {isCashAlert && (
+                      <div className="p-2 bg-rose-500/10 border border-rose-500/20 rounded-md text-[10px] text-rose-400 leading-relaxed font-semibold">
+                        🚨 ระวัง: สัดส่วนเงินสดจริงต่ำกว่าข้อพยากรณ์ Benner ({actualCashPercent.toFixed(1)}% &lt; {recommendedCash}%) แนะนำให้ระมัดระวังการเข้าซื้อเพิ่ม และทยอยขายทำกำไรหุ้นบางตัวเพื่อตุนเงินสดรับมือการปรับฐานรอบใหญ่!
+                      </div>
+                    )}
+                    {!isCashAlert && selectedCycleYear === 2026 && (
+                      <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-[10px] text-emerald-400 leading-relaxed font-semibold">
+                        ✅ ปลอดภัย: เงินสดสำรองในพอร์ตสูงกว่าเกณฑ์วิกฤตของรอบ Benner ({actualCashPercent.toFixed(1)}% &gt;= {recommendedCash}%) พร้อมรับมือทุกสภาวะตลาด
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -413,7 +706,7 @@ export default function DashboardTab({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
             {/* ฝั่งซ้าย: ปันผลสะสมแบ่งช่วงเวลา */}
-            <div className="lg:col-span-4 bg-white border border-slate-200 rounded-2xl p-5 space-y-3.5 shadow-xs">
+            <div className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl p-5 space-y-3.5 shadow-xs">
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-3">
                 <CalendarRange className="h-4 w-4 text-emerald-600" />
                 สรุปสัดส่วนรายได้กระแสเงินสดปันผลคาดรับ
@@ -453,21 +746,61 @@ export default function DashboardTab({
               </div>
             </div>
 
+            {/* ฝั่งกลาง: ติดตามแผน DRIP (Reinvested vs Received) */}
+            <div className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl p-5 space-y-3.5 shadow-xs flex flex-col justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-3">
+                  <Coins className="h-4.5 w-4.5 text-emerald-600" />
+                  ระบบการลงทุนต่ออัตโนมัติ (DRIP Tracker)
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-1 font-medium">ติดตามการนำปันผลกลับไปช้อนซื้อหุ้นต่อเพื่อเพิ่มความเร็วในการทบต้น</p>
+              </div>
+
+              <div className="space-y-2.5">
+                <div className="flex justify-between text-xs font-semibold">
+                  <span className="text-slate-500">อัตราการทบต้นปันผล:</span>
+                  <span className="font-bold text-emerald-600 font-mono">{reinvestmentRate.toFixed(1)}%</span>
+                </div>
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-500 rounded-full"
+                    style={{ width: `${reinvestmentRate}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2 font-medium">
+                <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center text-xs">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">ปันผลสะสมที่ได้รับจริง</span>
+                  <span className="font-bold text-emerald-700 font-mono">+{totalByDividend.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</span>
+                </div>
+
+                <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center text-xs">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">นำไปช้อนซื้อทบต้นแล้ว</span>
+                  <span className="font-bold text-slate-800 font-mono">+{totalReinvested.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</span>
+                </div>
+
+                <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center text-xs">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">คงเหลือสะสมในระบบ</span>
+                  <span className="font-bold text-slate-600 font-mono">{(totalByDividend - totalReinvested).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿</span>
+                </div>
+              </div>
+            </div>
+
             {/* ฝั่งขวา: เครื่องมือตั้งเป้าหมายทางการเงินปันผล (Interactive Target Calculator) */}
-            <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl p-5 md:p-6 space-y-4 shadow-xs">
+            <div className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl p-5 md:p-6 space-y-4 shadow-xs">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
                 <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
                   <Target className="h-4.5 w-4.5 text-emerald-600" />
                   เครื่องวัดเป้าหมายอิสรภาพทางการเงินจากปันผลทบต้น
                 </h3>
-                <span className="text-[10px] bg-slate-150 text-slate-600 px-2.5 py-0.5 rounded-full font-bold">🎯 ตั้งครวจระดับสัดส่วน</span>
               </div>
 
               <div className="space-y-4">
                 {/* แถบเลื่อนปรับเป้าหมาย */}
                 <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-600">เป้าหมายปันผลสะสมรายปีที่ต้องการ (เป้าหมายอิสรภาพ):</span>
+                    <span className="text-xs font-bold text-slate-600">เป้าหมายปันผลสะสมรายปีที่ต้องการ:</span>
                     <span className="text-base font-bold text-emerald-700 font-mono bg-white border border-slate-200 px-3 py-1 rounded-lg">
                       {dividendTarget.toLocaleString()} ฿
                     </span>
@@ -532,6 +865,52 @@ export default function DashboardTab({
                 </div>
 
               </div>
+            </div>
+
+            {/* ฝั่งขวาสุด: ตัวตรวจสอบความยั่งยืนของเงินปันผล (Dividend Safety Tracker) */}
+            <div className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl p-5 space-y-3.5 shadow-xs flex flex-col justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-3">
+                  <ShieldAlert className="h-4.5 w-4.5 text-emerald-600" />
+                  ความยั่งยืนของปันผล (Safety Tracker)
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-1 font-medium">ประเมินคุณภาพของกระแสเงินสดและสัดส่วนกำไรที่จ่ายออก</p>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between items-center font-medium">
+                  <span className="text-slate-500">ปีที่จ่ายเติบโตเฉลี่ย:</span>
+                  <span className="font-bold text-slate-800 font-mono">{avgGrowthYears.toFixed(1)} ปี</span>
+                </div>
+                <div className="flex justify-between items-center font-medium">
+                  <span className="text-slate-500">อัตราเติบโตปันผล 5 ปีเฉลี่ย:</span>
+                  <span className={`font-bold font-mono ${avgGrowthRate >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {avgGrowthRate.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] font-semibold text-slate-500">
+                    <span>บริษัทที่ FCF เป็นบวก:</span>
+                    <span className="font-bold text-emerald-600 font-mono">{fcfPositivePercent.toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full"
+                      style={{ width: `${fcfPositivePercent}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {highPayoutStocks.length > 0 ? (
+                <div className="p-2 bg-amber-50 border border-amber-100 rounded-lg text-[9px] text-amber-700 leading-relaxed font-semibold">
+                  ⚠️ ระวัง: บริษัทที่มี Payout Ratio &gt; 80% ({highPayoutStocks.join(', ')}) เสี่ยงปันผลลดหากกำไรหดตัว!
+                </div>
+              ) : (
+                <div className="p-2 bg-emerald-50 border border-emerald-100 rounded-lg text-[9px] text-emerald-700 leading-relaxed font-semibold">
+                  ✅ ปลอดภัย: หุ้นที่ถือครองทั้งหมดมี Payout Ratio ปลอดภัย มีกระแสเงินตุนหนาแน่น
+                </div>
+              )}
             </div>
 
           </div>

@@ -11,7 +11,7 @@ import {
   evaluateHoldingSummary,
   calculateMaxSharesForTranche
 } from '../utils/calculations';
-import { AlertTriangle, PlusCircle, ArrowDownRight, Tag, Trash2, Milestone, Wallet, TrendingDown } from 'lucide-react';
+import { AlertTriangle, PlusCircle, ArrowDownRight, Tag, Trash2, Milestone, Wallet, TrendingDown, Coins } from 'lucide-react';
 
 interface TransactionTabProps {
   stocks: StockInfo[];
@@ -20,6 +20,7 @@ interface TransactionTabProps {
   settings: SystemSettings;
   onRecordBuy: (symbol: string, trancheIndex: 1 | 2 | 3 | 4, price: number, qty: number, rsi: number, sma: number) => void;
   onRecordSell: (symbol: string, type: 'HALF' | 'HALF_REMAINING' | 'STOP_LOSS' | 'ALL', price: number, rsi: number, sma: number) => void;
+  onRecordDividend: (symbol: string, amount: number, rsi: number, sma: number) => void;
   onDeleteTransaction: (id: string) => void;
   onResetTransactions: () => void;
   preselectedSymbol?: string | null;
@@ -33,6 +34,7 @@ export default function TransactionTab({
   settings,
   onRecordBuy,
   onRecordSell,
+  onRecordDividend,
   onDeleteTransaction,
   onResetTransactions,
   preselectedSymbol,
@@ -116,6 +118,23 @@ export default function TransactionTab({
 
     onRecordSell(selectedSymbol, type, tradePrice, stock.rsi5, stock.sma60);
     setCustomPrice('');
+  };
+
+  const handleRecordDividend = () => {
+    const estDividend = activeSummary.dividendYieldEst;
+    const userInput = window.prompt(
+      `กรุณาระบุจำนวนเงินปันผลที่ได้รับสำหรับหุ้น ${stock.symbol} (จำนวนเงินที่จะทบเข้าเงินสดพอร์ต):`,
+      estDividend.toFixed(2)
+    );
+    if (userInput === null) return; // User cancelled
+    
+    const amount = parseFloat(userInput);
+    if (isNaN(amount) || amount <= 0) {
+      alert("กรุณากรอกจำนวนเงินปันผลที่เป็นตัวเลขมากกว่า 0");
+      return;
+    }
+
+    onRecordDividend(selectedSymbol, amount, stock.rsi5, stock.sma60);
   };
 
   // ตรวจสอบกฎการเทรดข้อห้ามต่างๆ เพื่อแสดงคำเตือน (Trade Rule Validator)
@@ -466,6 +485,13 @@ export default function TransactionTab({
                   <span className="font-sans text-emerald-800">ปันผลเฉลี่ยคาดการณ์ต่อปี:</span>
                   <span className="font-bold text-emerald-700">+{activeSummary.dividendYieldEst.toLocaleString()} บาท</span>
                 </div>
+                <button
+                  onClick={() => handleRecordDividend()}
+                  className="mt-3 w-full py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold rounded-lg cursor-pointer transition flex items-center justify-center gap-1.5"
+                >
+                  <Coins className="h-3.5 w-3.5" />
+                  บันทึกรับเงินปันผลสะสม (DRIP)
+                </button>
               </div>
             )}
           </div>
@@ -516,8 +542,14 @@ export default function TransactionTab({
                     <td className="p-3 font-sans text-slate-400 text-[10px]">{tx.date}</td>
                     <td className="p-3 font-bold text-slate-900 font-sans">{tx.symbol}</td>
                     <td className="p-3">
-                      <span className={`px-1.5 py-0.5 rounded font-sans text-[10px] font-bold ${tx.type === 'BUY' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                        {tx.type === 'BUY' ? 'ซื้อ' : 'ขาย'}
+                      <span className={`px-1.5 py-0.5 rounded font-sans text-[10px] font-bold ${
+                        tx.type === 'BUY' 
+                          ? 'bg-emerald-100 text-emerald-800' 
+                          : tx.type === 'SELL'
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {tx.type === 'BUY' ? 'ซื้อ' : tx.type === 'SELL' ? 'ขาย' : 'ปันผล'}
                       </span>
                     </td>
                     <td className="p-3 font-sans font-bold text-slate-600">{tx.tranche}</td>
